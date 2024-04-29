@@ -14,7 +14,7 @@ knit: (function(inputFile, encoding) {
       inputFile,
       encoding = encoding,
       output_dir = '../manuscripts',
-      output_file = "Introduction.html"))})
+      output_file = "introduction.html"))})
 
 ---
 
