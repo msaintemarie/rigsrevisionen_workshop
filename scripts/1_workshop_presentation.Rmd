@@ -1,30 +1,68 @@
 ---
-title: "Workshop Presentation"
+title: "<img src=\"https://crctcs.openum.ca/files/sites/60/2024/03/cuso2.png\" style=\"float: left;margin-right:25px; margin-top:7.5px; height:150px\"/> Workshop on Computational Text Analysis"
 author: "Maxime Sainte-Marie"
-date: "2024-02-27"
-output: html_document
+date: "`r format(Sys.time(), '%B %d %Y')`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    css: '../scripts/css_files/standard.css'
+geometry: margin=1in
+knit: (function(inputFile, encoding) {
+  browseURL(
+    rmarkdown::render(
+      inputFile,
+      encoding = encoding,
+      output_dir = '../manuscripts',
+      output_file = "Introduction.html"))})
+
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Make sure every package is installed
+for(this_package in c("data.table",
+                      'DT',
+                      'gt',
+                      "tidyverse",
+                      "readxl",
+                      'fs',
+                      "rstudioapi",
+                      'knitr',
+                      'rprojroot')){
+  if(!this_package %in% installed.packages()){
+    install.packages(this_package)
+  }
+}
+
+#activate magrittr to use pipe operator without referencing
+library(magrittr)
+library(data.table)
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  root.dir = rprojroot::find_rstudio_root_file())
+
 ```
 
-## R Markdown
+# Methodology
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+Here is the methodology.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Here is the distribution of the first name genderedness of all human entities in the truthy Wikidata dump downloaded on April 3rd, 2024.
 
-```{r cars}
-summary(cars)
-```
 
-## Including Plots
+## First-name-based gender probabilities
 
-You can also embed plots, for example:
+This is the procedure.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
+# Results
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+These are the results.
+
+## Author Types
+
+These are the results.
+
+## Citations
+
+These are the results.
