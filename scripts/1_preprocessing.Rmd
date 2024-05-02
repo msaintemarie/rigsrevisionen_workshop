@@ -7,7 +7,7 @@ output:
   html_document:
     toc: yes
     toc_float: yes
-    css: '../../scripts/css_files/standard.css'
+    css: 'css_files/standard.css'
 geometry: margin=1in
 knit: (function(inputFile, encoding) {
   browseURL(
