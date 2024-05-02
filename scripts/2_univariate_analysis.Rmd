@@ -1,0 +1,973 @@
+---
+title: "Rigsrevisionen Workshop on Computational Text Analysis"
+subtitle: 'Part II: Introduction to Univariate Analysis'
+author: "Maxime Sainte-Marie, Ph.D."
+date: "May 6th 2024"
+bibliography: bibliographie.bib
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    css: '../../scripts/css_files/standard.css'
+geometry: margin=1in
+knit: (function(inputFile, encoding) {
+  browseURL(
+    rmarkdown::render(
+      inputFile,
+      encoding = encoding,
+      output_dir = 'documents/manuscripts',
+      output_file = "2_univariate_analysis.html"))})
+
+---
+
+Beyond the processing of textual data itself, no rigorous analysis of textual data can be undertaken without prior corpus exploration; after all, before we can analyze a particular dimension of a corpus, we must first have a general idea of ​​what it contains. It is precisely this need and similar exploratory objectives that univariate analysis is suited to. In computer-assisted text analysis, univariate analysis consists of detecting statistical regularities and general trends within a corpus, one variable at a time. This type of analysis can relate not only to the content of a corpus, but also to the metadata associated with it and which complement it. Metadata is "data data", in other words data providing information about other data for descriptive or defining purposes. And of course, the greater the mass of metadata, the more “informed” a corpus is and the more useful and necessary univariate analysis becomes.
+
+The corpus used for this course, like many others available for excavation purposes, is relatively well documented, with each included document coupled with a set of attributes providing various information relating to its publication. Here as elsewhere, however, the size of the mining corpora can complicate the analysis of metadata, to the extent that the imposing quantity of data to be processed and the computational constraints that it poses can substantially slow down the analysis procedures, or even make them impossible. . From this perspective, the choice of modules and analysis methods represents an important step in text mining. For this reason, we thought it would be a good idea to take advantage of this section on metadata analysis to introduce you to the *data.table* library, certainly one of the most useful and efficient developed for the R language. A cheat sheet for this library is also available at the following address:
+
+[Click here for the data.table cheatsheet](https://s3.amazonaws.com/assets.datacamp.com/blog_assets/datatable_Cheat_Sheet_R.pdf)
+
+This document will therefore be the subject of a triple initiation for you: firstly to the **data.table** library, but also to the corpus used in the context of this course as well as to the analysis of metadata corpus in general.
+
+Let's begin by first setting the workspace for this session.
+
+```{r setup, echo = FALSE}
+
+# Make sure every package used here is installed
+for(this_package in c('data.table',
+                      'magrittr',
+                      'stringr',
+                      'mgsub',
+                      'tufte',
+                      'here')){
+  if(!this_package %in% installed.packages()){
+    install.packages(this_package)
+  }
+}
+
+# Activate magrittr to use the pipe operator and data.table functions without referencing
+library(magrittr)
+library(data.table)
+
+# To show both the code chunks and their output
+knitr::opts_chunk$set(
+  echo = TRUE)
+
+# To set the working directory for both code chunk executions and knitting
+here::i_am(path = 'scripts/2_univariate_analysis.Rmd')
+
+
+```
+
+# Introduction to *data.table*
+
+The building blocks of the package *data.table* are, as the package name suggests, data tables. A *data table* is, in a way, an improved version of the *data frame*. Just like this, this is also a columnar data structure, and these can be of different types but always the same length. In addition, the *data table* inherits the properties of standard *data frames*, but increases and optimizes their functionality.
+
+This optimization of functionalities first manifests itself in terms of speed of execution, the *data.table* library allowing routine operations to be carried out in a fraction of the time normally required. The import of data, the first step in any corpus analysis, represents a very exemplary case in this respect. In the code block below, the *system.time* function allows you to compare the speed of execution of three different data import functions. The first two are basic R functions: *read_csv()* is certainly the best known and used, while *readRDS()* allows the import of compressed files with *.RDS* extension. The third function comes from the **data.table** library.
+
+```{r standard_import}
+#print('Processing time for read.csv')
+#system.time(read.csv(here::here('data','corpus.txt'), sep = '\t'))
+
+#print('Processing time for readRDS')
+#system.time(readRDS(here::here("data", "corpus.rds")))
+
+#print('Processing time for data.table::fread')
+#system.time(data.table::fread(here::here("data",'corpus.txt'),
+                              #sep = '\t'))
+```
+
+As you can notice, the *fread()* function is the fastest of the three. The *readRDS()* function, however, has the advantage of being able to read compressed *.RDS* type files, which saves a lot of storage space. But in situations where multiple files need to be imported and exported, the time savings from using *data.table* can be enormous; This is because *data.table* processes data in a parallel manner, by default using all threads available on multi-core computers, which linearly reduces processing time.
+
+In addition to its speed and performance, the *fread()* function is also very user-friendly, since it allows not only the import of files on local disks, but also online files or more or less clean character strings. and must be pre-processed syntactically. This function automatically performs variable typing, and allows you to specify the rows and columns to import. Since these selection operations are integrated into the import operation, all this is done much more quickly than usual, that is, when the data is imported and then split.
+
+To take an example, let's start by inspecting our corpus. A first way to do this with *RMarkdown* is to call the object directly.
+
+```{r data_table_columns, results = 'hide'}
+
+
+# The assignment function (<-) allows to create an object'corpus' and to include it in our project environment
+
+#corpus <- data.table::fread(here::here('data', 'corpus.txt'),
+                            #sep = '\t')
+
+#corpus
+
+```
+
+Another way to visualize the corpus is to use the basic *str()* function, which allows you to get a brief overview of the student corpus, its attributes, the type of object involved and the labeling of the words that 'it contains.
+
+```{r data.table_str}
+#str(corpus)
+```
+
+Finally, the *View()* function of RStudio allows you to open a new window offering a detailed portrait of the corpus and allowing you to consult it interactively.
+
+```{r view, eval = FALSE}
+#View(corpus)
+```
+
+Having looked at our corpus, let's now return to the case of selective import of columns, taking as an example the column containing the terms of our corpus: **aktstykke_tekst**.
+
+```{r data.table_column_import}
+
+#print('Processing time for read.csv')
+#system.time(read.csv(here::here('data', 'corpus.txt'), sep = '\t')$aktstykke_tekst)
+
+#print('Processing time for readRDS')
+#system.time(readRDS(here::here("data", "corpus.rds"))$aktstykke_tekst)
+
+#print('Processing time for data.table::fread')
+#system.time(data.table::fread(here::here('data', 'corpus.txt'),
+                              #sep = '\t',
+                              #select = 'aktstykke_tekst'))
+
+```
+
+This example clearly shows the difference in performance between *data.table::fread()* and *read.csv()*: while the first proceeds by directly importing the column, which results in additional execution time faster than usual, the *read.csv()* and *readRDS()* functions must first import the entire corpus before selecting the *Article_body* column, which further slows down the process.
+
+Finally, still on the subject of the relative advantages of the *data.table* package in terms of file management, note that the same goes for the *fwrite()* function, which allows parallelized and much faster data recording that the basic functions of R.
+
+```{r data.table_export}
+
+#print('Processing time for write.table')
+#system.time(
+  #write.table(corpus,
+              #file = here::here('data', 'corpus.txt'),
+              #sep = '\t'))
+
+#print('Processing time for saveRDS')
+#system.time(
+  #saveRDS(corpus,
+          #file = here::here('data', 'corpus.rds')))
+
+#print('Processing time for data.table::fread')
+#system.time(
+  #data.table::fwrite(x = corpus,
+                     #file = here::here('data', 'corpus.txt'),
+                     #sep = '\t'))
+
+```
+
+Along with this speed of execution, another obvious advantage of *data.table* is its syntactic simplicity. The package in fact provides a rapid access and transformation structure, based on three elements: rows, columns and groups. If the first two elements are not surprising in themselves, the third nevertheless represents a structural specificity of data tables. Such an addition is, however, easily explained: since most data analysis operations require performing operations by and on groups, it is common to consider grouping as a virtual third dimension. We will come back to this later.
+
+For now, the following diagram gives a general overview of the *data tables* syntax:
+
+```{r data_table_str, eval = FALSE}
+
+DT[i, j, by]
+   |  |  |
+   |  |  |--> groupes: opérations de groupement sur les attributs (SQL: *WHERE*, *ORDER BY*)
+   |  |-----> colonnes: sélection des attributs, opérations sur les attributs (SQL: *SELECT*, *UPDATE*)
+   |--------> rangées: filtrage, sélection et découpage des entrées/observations (SQL: *GROUP BY*)
+
+```
+
+This formula can be read as follows: "given a *data.table* DT, filter the rows in *i*, then calculate based on the columns specified in *j* then grouped by *by*". The rest of this course segment will consist of presenting each of these three elements to you, then applying them to the corpus in order to allow you to learn about the library, univariate analysis as well as the analysis of metadata.
+
+## Exercises
+
+1. Import the 'nr' and 'aktstykke_tekst' columns from the corpus using the *data.table::fread()* function. Save this data table under the name of your choice using the *data.table:: function. fwrite()*. This file will be reused for a later exercise.
+
+```{r exercise_1}
+# Write your code here
+
+```
+
+# Filtering
+
+Let's start with the rows, *i*. The features are similar to those offered for data frames, but more user-friendly and improved. The first argument is always interpreted as a row operation. Unlike data frames, however, the indexing of a data table is always numeric, so that rows can only be identified by numbers (except for Boolean expressions which we will see later); Furthermore, it is not necessary to add a comma to distinguish the argument for rows from that for columns.
+
+```{r row_numbers}
+
+#all.equal(corpus[3:4], corpus[c(3,4), ])
+
+```
+
+To exclude rows, the vector designating the rows to exclude must be preceded by the negation operator (*-*) or an exclamation point (*!*).
+
+```{r row_excusion}
+
+#all.equal(corpus[-(3:4)], corpus[!c(3,4), ])
+
+```
+
+Data.table also includes certain predefined functions or variables that greatly facilitate certain processing operations. One of these functions is *.N*, which is an integer vector of length 1, corresponding to the total number of rows in the data table.
+
+```{r total_rows, results = 'hide'}
+
+# To get the last row
+#corpus[.N]
+
+# To obtain the last ten rows
+#corpus[(.N - 10):(.N)]
+
+```
+
+It is also possible to select rows using Boolean expressions, with the rows returned being those evaluated as true. Let’s take the *Article_Type* column for example.
+
+```{r column_values}
+
+# To obtain the different values for 'ministerområde'...
+
+#corpus[, unique(ministerområde)]
+
+```
+
+Using the basic operators of R, all Boolean selection operations can be used. Also, *data.table* allows you to specify columns directly, without using the basic *$* operator.
+
+```{r boolean_select, results = 'hide'}
+
+#head(corpus[ministerområde == 'Udenrigsministeriet'])
+
+#head(corpus[ministerområde != 'Ministeriet for Videnskab, Teknologi og Udvikling' &
+              #ministerområde != 'Finansministeriet'])
+
+# What is  returned by these two commands?
+
+```
+
+Other *data.table* functions make it easier to create subsets, particularly with respect to character variables. The first function, *%like%*, allows you to select all the rows satisfying a given character pattern, such as the expression 'group' in the content of the corpus documents.
+
+```{r like_select, results = 'hide'}
+
+#head(corpus[aktstykke_tekst %like% 'mink'], n = 25)
+
+```
+
+The advantage of the *%like%* function is that it allows queries in the form of regular expressions; you will learn more about this in a future course. Another very useful function is *%chin%*, a more powerful version of the basic *%in%* function and helps identify rows whose specified variable matches one of a defined number of substrings of characters.
+
+```{r chin_select, eval = FALSE}
+
+#head(corpus[aktstykke_tekst %chin% c('mink', 'minkavl')])
+
+# Quels termes retenus par la fonction du bloc précédent (celle utilisant %like%) sont exclus de la présente opération?
+
+```
+
+It seems relevant here to introduce you to one of the basic conceptual tools of linguistic analysis, namely the distinction between occurrences (also called 'instances' or 'tokens', *tokens* in English) and types. Introduced by the American philosopher Charles Sanders Peirce, this distinction between occurrences and types refers to the difference between the totality of the elements of a set and the set of **distinct** elements or that it contains. In a linguistic context, a lexical type is therefore a class of identical lexical occurrences present in a given linguistic sample. To illustrate this distinction, take for example the following text segment, taken from the short prose piece *Worstward Ho!* by Samuel Beckett:
+
+> Ever tried Ever failed.
+>
+> No matter. Try again.
+>
+> Fail again. Fail better.
+>
+> `r tufte::quote_footer('Samuel Beckett, *Worstward Ho!*')`
+
+In this short extract, there are two occurrences of the words 'already', 'encore' and 'fail'. Taking into account these repetitions, the extract thus includes 12 lexical occurrences but only 9 distinct lexical types. Of course, 'failed' and 'fail' represent two conjugated forms of the verb 'fail', while 'tried' and 'try' both refer to the verb 'to try'; converting these verbs to their infinitive form would thus reduce the number of lexical types in the poem to 7 lexical types instead of 9. Along the same lines, all occurrences of 'group' and 'groups' obtained in the code blocks previous ones could be converted to the singular to refer to only one lexical type. Given these normalization possibilities, are conjugate, gender and number inflections really useful for semantic analysis? Answering such a question is not an easy task and is one of the decisions to be made during the corpus cleaning and pre-processing phase, which will be covered in a future course. For the moment, let us just emphasize the distinction between occurrences and lexical types and the relationship of multiplicity which connects them; this ratio necessarily means that a text has many fewer lexical types than occurrences. To perform such counts, however, it is necessary to perform operations on our corpus; When using data tables, such manipulations can be carried out using functions specified in *j*, in other words on the columns, which will be the subject of the next section.
+
+## Exercises
+
+Using the function presented above:
+
+1. Generate the list of morphosyntactic tags from the *upos* column
+
+```{r exercise_2}
+# Write your code here
+
+```
+
+2. Select the rows of a terms tagged "NOUN"
+
+```{r exercise_3}
+# Write your code here
+
+```
+
+3. Select all rows whose attribute 'token' contains the substring *mink*
+
+```{r exercise_4}
+# Write your code here
+
+```
+
+# Operations
+
+Let's return once again to the basic structure of the data table.
+
+```{r data_table_str3, eval = FALSE}
+
+DT[i, j, by]
+   |  |  |
+   |  |  |--> groupes: opérations de groupement sur les attributs
+   |  |-----> colonnes: sélection des attributs, opérations sur les attributs
+   |--------> rangées: filtrage, sélection et découpage des entrées/observations
+
+```
+
+Let's recall once again how to read this formula: "given the *data.table* DT, filter the rows in *i*, then calculate based on the columns specified in *j* then grouped by *by*". Now let's focus on the *j* argument, which is used to select and process columns.
+
+As with data frames, it is possible to select several columns by specifying them nominally or ordinally using the concatenation function *c(*); Here again, it is possible to exclude certain columns using *-* or *!*. However, it is also possible with *data.table* to select columns by list of variables, in which case the column names are not specified in quotes. *Data.table* even offers a simplified version of *list()*, consisting of replacing this function with a simple dot. The last two cases, however, can only be used in a positive context.
+
+```{r multi_column_select_comparison}
+
+#all.equal(corpus[, c('token', 'upos')],
+          #corpus[, list(token, upos)])
+
+#all.equal(corpus[, .(token, upos)],
+          #corpus[, list(token, upos)])
+
+#all.equal(corpus[, -c('token', 'upos')],
+          #corpus[, !c(8, 10)])
+
+```
+
+However, ordinal column selection is considered bad practice, since many operations can change the ordering of rows and thus give unexpected results. So, use column names whenever possible, especially since the listwise selection offered by *data.table* allows you to rename selected columns as needed.
+
+```{r column_rename}
+
+#colnames(corpus)
+#colnames(corpus[, .(id = 'doc_id',
+                    #titre = 'Title',
+                    #terme = 'token',
+                    #publication = 'Publication',
+                    #type = 'Type_article',
+                    #date = 'Date_article',
+                    #page = 'Page_article',
+                    #auteur = 'Auteur')])
+```
+
+It is also important to mention that in the case of selecting a single column, the type of object returned as output depends on the column selection mode: whereas a string or a list provided as an argument to * j* always returns a data table, a vector rather returns a vector.
+
+```{r unique_column_select_comparison, eval = FALSE}
+
+#head(corpus[, 'token'], 2)
+
+#head(corpus[, .(token)], 2)
+
+#head(corpus[, token], 2)
+
+```
+
+The column functionality of *Data.table* goes beyond simple selection, however, since it is also possible to perform operations on columns by treating them as variables of the *j* parameter. The reason why *data.table* allows column names to be entered as variables in *j* is to allow operations to be performed directly on the corresponding columns. As an example, let's take the *.N* function and use it in *j* to obtain a result recalling the distinction between occurrences and lexical types. Another *data.table* function that is particularly relevant here is *uniqueN()*. While the base function *unique()* returns the distinct values ​​of the specified input object, *uniqueN()* simply returns the number of distinct values ​​of the specified input object.
+
+```{r number_rows}
+
+#corpus[, .N]
+
+#corpus[,
+       #uniqueN(token)]
+
+# Quelle interprétation donnez vous à ces commandes ainsi qu'à leur résultat?
+
+```
+
+It is possible to combine the functionalities of *i* and *j* and thus perform operations on subset columns. The *.N* function can thus be used in *j* to obtain the total number of rows satisfying the constraints specified in *i*.
+
+```{r subset_mean_nchar}
+
+#corpus[Type_article == 'Opinion', .N]
+
+#corpus[Type_article == 'Opinion', data.table::uniqueN(token)]
+
+# Quelle interprétation donnez-vous à ces commandes ainsi qu'à leur résultat?
+
+```
+
+It is also possible to use the *.()* operation on *j* in order to carry out several treatments on the same column, whether at the level of the corpus as a whole or of a subset of it. -ci, defined using criteria provided in *i*. For each individual treatment, the *=* function is used to name the corresponding column. Remember that the operations defined in *j* apply after the selection and filtering operations specified in *i* have been performed.
+
+As an example, let's take the case of a well-known lexical statistic in the field of quantitative linguistics: the type-token ratio (*type-token ratio* in English). This ratio counts the number of lexical occurrences for each distinct lexical type and thus makes it possible to evaluate, albeit in an approximate manner, the lexical diversity or concentration of a linguistic sample, in the context of a document or corpus: the greater the proportion gets closer to 0, the more concentrated the vocabulary; conversely, the closer the value of the ratio is to 1, the higher the probability that any lexical occurrence is unique, and the more extensive the lexicon of the lingusitic sample considered. Let's see what happens to our corpus.
+
+```{r type_token_ratio}
+
+#corpus[, .(type_token_ratio = uniqueN(token)/.N)]
+
+# Quelle interprétation donnez-vous à ces commandes et à leurs résultats?
+
+```
+
+Of course, a type-occurrence ratio of 0 for a non-empty corpus constitutes a mathematical impossibility; the ratio can become infinitesimal (in fact, it tends towards that), but will never become zero. Conversely, a ratio of 1 remains mathematically possible; after all, a corpus of a single word contains one occurrence and one type, which gives a ratio of 1. However, a ratio of 1 remains more than improbable from a linguistic point of view, any language or communication system having a large and inevitable part of redundancy. Like other measures of lexical statistics, the type-occurrence ratio, however, has a strong dependence on the size of the corpus: the longer the linguistic sample, the more the probability of occurrence of new lexical types decreases, and therefore the more the ratio inevitably tends towards 0. For samples of comparable size, however, this indicator can nevertheless prove useful, particularly in terms of evaluating the level of second language learning and detecting certain linguistic pathologies. We will return to this indicator later.
+
+## Exercises
+
+Au moyen des fonctions présentées jusqu'ici, trouvez:
+
+1. Renommez les colonnes du data frame selon les critères suivants:
+    - Traduisez les noms en français
+    - N'utilisez que des lettres minuscules
+    - Séparez les mots par des tirets bas (_)
+
+```{r exercise_5}
+# Write your code here
+
+``` 
+
+2. Le nombre d'articles dans le corpus.
+
+```{r exercise_6}
+# Write your code here
+
+```
+
+3. Le nombre d'occurrences nominales (name tokens) et de types nominaux distincts inclus dans le corpus. Présentez le tout en un seul data table.
+  
+```{r exercise_7}
+# Write your code here
+
+```
+  
+  
+4. La longueur moyenne des occurrences nominales et des types nominaux du corpus
+  
+```{r exercise_8}
+# Write your code here
+
+```
+
+5. Les différents types lexicaux (word types) du corpus contenant la sous-chaîne de caractères 'group'
+
+```{r exercise_9}
+# Write your code here
+
+```
+
+6. Le ratio type-occurrence pour les noms du corpus.
+
+```{r exercise_10}
+# Write your code here
+
+```
+
+# Referencing
+
+Another interesting property of *data.table* is referencing, which allows you to add, update and delete columns in a data frame. Consider the case of a simple variable reassignment. In the basic R infrastructure, variable reassignment is very expensive in both time and space. Before R 3.1.0, a reassignment required a deep copy of the object to be reassigned; that is, R would create a copy of the entire data frame, save it elsewhere on disk, and assign it a temporary variable name, for example *tmp*. The temporary object was subsequently modified in accordance with the requested reassignment and substituted for the original object. This is a very expensive operation, since to modify a single variable in a 2 gigabyte data frame, 2 additional gigabytes are needed to create a full copy. R 3.1.0 changed the situation somewhat: instead of a deep copy of the entire data frame, only the column to be modified was copied. Despite this improvement, the procedure remains very suboptimal, since a substantial mass of data is processed for nothing. *Data.table* proceeds much simpler, either by referencing: instead of creating deep copies and temporary variables, the variable is directly modified in the original object, which results in a saving of time and space substantial treatment.
+
+The referencing operator used by *data.table* to add/update/modify columns is **:=**. This operator can be used in two different ways, either infixed (between ) or prefixed. In the first case, the vector of column names to modify is placed to the left of the operator and a list of values ​​corresponding to each of the column names specified to the right of the operator. In the second case, the operator is placed between serious accents and acts as a function whose arguments represent the columns to create/modify/delete. In both cases, setting a column to NULL deletes it. As a demonstration, here we introduce three functions to extract and categorize date information contained in a data table: *year*(), *month()*, *mday()*.
+
+However, before carrying out the necessary operations, some notions of algorithmic performance are necessary. Since date information pertains to the document rather than the lexical occurrence, all occurrences of the same document necessarily have the same publication date. Consequently, any operation relating to the *Article_Date* column of our corpus risks being executed several times for the same document, which unnecessarily slows down the process. A much more efficient strategy would consist of extracting the date information from the corpus, eliminating duplicates, applying the transformations on the *Date_article* column of the reduced data table, then adding the result of these operations to the initial corpus by means of an operation join or match (*merge* or *join* in English). You will save a lot of time here, provided that the necessary operations are carried out adequately.
+
+Let's first start by creating a data table from the *doc_id* and *Date_article* columns, taking care to only keep the unique pairs of values:
+
+```{r new_data_frame}
+
+#dates_corpus <- unique(corpus[,.(doc_id, Date_article)])
+
+```
+
+Let's apply the three functions *year()*, *month()* and *mday()* on the new data table in order to create columns for the year, month and day of publication of the different documents, while removing the **Article_Date** column, now useless:
+
+```{r datetime_processing}
+
+
+# Création de nouvelles colonnes pour l'année, le mois et le jour de publication. Suppression de la colonne Date_article
+
+# dates_corpus <-
+#   dates_corpus[, c('année',
+#                    'mois',
+#                    'jour',
+#                    'Date_article') := .(data.table::year(Date_article),
+#                                         data.table::month(Date_article),
+#                                         data.table::mday(Date_article),
+#                                         NULL)]
+```
+
+As you probably guessed, the letter 'm' in the *mday()* function means 'month' and returns the monthly ordinal of the corresponding date, for example the 15th day of the 9th month of the 2012th year. Functions similar to *mday()* are included in *data.table* and allow you to obtain the weekly and annual ordinals of the dates submitted as input (it's up to you to find them...). Finally, let's join the new columns to the initial corpus using the *merge()* function, a basic function of the R language. As mentioned previously, data tables are a class of data frames, so all functions that can be applied to the latter can also be applied to the former, which sometimes even results in impressive performance gains. This is also the case for the *merge()* function. To perform a join operation, it is necessary to specify, for each joined data structure, the column or key from which the join will be performed as well as the rows of each data set to keep. In the present case, it involves keeping all the rows of the initial corpus by setting the value of the argument *all.x* to *TRUE*, then adding the three new newly created columns and their values ​​to the rows of the initial corpus based on their 'doc_id' value by setting the *by* parameter to *doc_id*.
+
+```{r merging, results = 'hide'}
+
+# corpus_date <- merge(x = corpus,
+#                      y = dates_corpus,
+#                      by = 'doc_id', all.x = TRUE)
+# 
+# data.table::fwrite(corpus_date, 'corpus_date.txt')
+# 
+# corpus_date[1:10]
+
+```
+
+Overall, the different operations carried out in *i* and *j* and presented to date allow rapid and efficient processing of the data; However, they offer limited functionality in terms of data analysis, as any exclusive use of these functions only provides a local and limited understanding of the data consulted. For further data analysis, i.e. to be able to "read between the lines" of a data set, the different values ​​of one or more attributes must be able to be compared to each other and included in data processing procedures. common transformations. It is precisely for this purpose that the data aggregation or grouping functions in the different query and data manipulation languages ​​are dedicated. In *data.table*, such functions can be performed by means of instructions specified at the *by* parameter, which we will focus on in the next segment.
+
+## exercises
+
+Au moyen des fonctions présentées jusqu'ici:
+
+1. Importez le data.table contenant les colonnes 'doc_id' et 'Date_article' que vous avez créé dans le cadre de l'exercise du premier segment du présent cours.
+
+```{r exercise_11}
+# Write your code here
+
+```
+
+2. Ajoutez par référencement les colonnes 'année', 'mois' et 'jour' au data table que vous venez d'importer.
+
+```{r exercise_12}
+# Write your code here
+
+```
+
+3. Joignez ces trois nouvelles colonnes au corpus au moyen de la colonne/clé 'doc_id' en prenant soin de ne pas inclure la colonne 'Date_article' dans la procédure.
+
+```{r exercise_13}
+# Write your code here
+
+```
+
+4. Trouvez toutes les occurrences lexicales d'articles publiés à la 185e journée de l'année 2012.
+
+```{r exercise_14}
+# Write your code here
+
+```
+
+5. Supprimez la colonne 'Date_article' du corpus
+
+```{r exercise_15}
+# Write your code here
+
+```
+
+6. Trouvez les différentes valeurs pour l'attribut 'année'. Croyez-vous que cette information est utile? Si oui, pourquoi? Sinon, effectuez les changements qui s'imposent.
+  
+```{r exercise_16}
+# Write your code here
+
+```
+
+# Grouping
+
+Let's return one last time to the basic structure of the data table.
+
+```{r data_table_str4, eval = FALSE}
+
+DT[i, j, by]
+   |  |  |
+   |  |  |--> groupes: opérations de groupement sur les attributs
+   |  |-----> colonnes: sélection des attributs, opérations sur les attributs
+   |--------> rangées: filtrage, sélection et découpage des entrées/observations
+
+```
+
+Let's return to the interpretation given for this schema: “let the data.table DT, filter the rows in *i*, then calculate based on the columns specified in *j* then grouped by *by*”. If the first two elements of this structure are relatively conventional, the third and last, *by*, probably represents the main innovation proposed by the *data.table* package. What exactly do we mean by grouping or aggregation? Technically, it involves partitioning a table into subtables based on the values ​​of one or more attributes and applying functions on them. It is a fundamental concept of data science, implemented in all query and data manipulation languages. To take a relatively simple example, let's calculate the total number of occurrences and lexical types per document type as well as the type-occurrence ratio for each group.
+
+
+```{r single_group}
+
+# corpus[, .(occurrences = .N,
+#            types = uniqueN(token),
+#            ratio = uniqueN(token)/.N),
+#        by = .(Type_article)]
+# 
+# corpus[, .(occurrences = .N,
+#            types = uniqueN(token),
+#            ratio = uniqueN(token)/.N),
+#        by = 'Type_article']
+
+# Quelle interprétation donnez-vous à ces commandes et à leurs résultats?
+
+```
+
+The two objects created by these grouping operations, structurally identical, have four columns, the first bearing the name of the column specified in *by* and the following three the name of the functions specified in *j*. Such statistical groupings correspond to what are generally called frequency distributions. Also called statistical distributions or empirical distributions, these distributions constitute the tabulation of data broken down by classes or categories, in which each category or class is associated with the number of elements relating to it. Drawing up frequency distributions greatly facilitates the analysis of a corpus or a dataset in general, since it makes it possible to reduce large masses of raw data to a sort of inventory of attributes, which can then serve as bases for new calculations and analyses. To this end, I draw your attention to the 'ratio' column of the previous datasets; notice how the value of the ratio changes depending on the document type: relatively high for 'Business', 'Light' and 'Arts and Entertainment' articles, then relatively low for 'News' and 'Opinion' documents ', which would suggest that the vocabulary of the last two document types is more concentrated than for the types of the first group. Remember, however, that the size of the groups varies a lot, which leaves some doubt about the validity of such an analysis. Other data breakdown strategies can overcome this situation, by changing the grouping attribute, of course, but also by carrying out more in-depth breakdowns. For this purpose, just like using *.()* in *j*, using *.()* in *by* rather than a character vector has the advantage that it becomes possible to perform one or more groupings on several columns and rename the columns thus grouped, thus allowing the creation of frequency distributions at several attribute levels.
+
+```{r mult_group}
+
+# corpus[,
+#        .(occurrences = .N,
+#          types = uniqueN(token),
+#          ratio = uniqueN(token)/.N),
+#        by = .(source = Publication,
+#               type_article = Type_article)]
+
+# Quelle interprétation donnez-vous à ces commandes et à leurs résultats?
+
+```
+
+This more in-depth breakdown allows more detailed analyzes to be carried out. Take for example the 'Affaires' articles from Le Devoir and Journal de Montréal: although the first group contains more articles than the second, its type-occurrence ratio is nevertheless higher than the latter, which is contrary to the statistical trend the size of linguistic samples. We are therefore right here to believe that the 'Business' articles in Le Devoir present a more diversified lexicon than those in the 'Business' section of the Journal de Montréal. This case analysis clearly shows the type of knowledge that the statistical analysis of a corpus and its metadata makes it possible to acquire.
+
+## exercises
+
+Au moyen des fonctions présentées jusqu'ici:
+
+1. Obtenez la distribution de fréquences des types et occurrences lexicaux, regroupée par source et type de publication
+
+```{r exercise_17}
+# Write your code here
+
+```
+
+2. Obtenez la distribution de fréquences des types et occurrences lexicaux, regroupée par étiquette morpho-syntaxique
+
+```{r exercise_18}
+# Write your code here
+
+```
+
+3. Obtenez, pour chaque source et type d'article, le nombre d'articles publiés.
+
+```{r exercise_19}
+# Write your code here
+
+```
+
+4. Obtenez, pour chaque source et mois de l'année 2012, le nombre d'articles publiés.
+
+```{r exercise_20}
+# Write your code here
+
+```
+
+# Chaining
+
+In previous segments, we saw that it is possible to transform a dataset by creating new columns by referencing or by grouping the different entries of a dataset based on certain attributes and aggregation functions applied on these. In most data languages, the application of new functions on the results of such operations generally involves adding new command lines to scripts and the consequent creation of so-called intermediate tables, tables whose sole function is to allow the compilation of subsequent tables. Such a way of proceeding is, however, very costly in terms of time and processing space. However, some packages offer users an interesting alternative in terms of sequential processing: chaining. By chaining, we mean here the possibility of creating sequences of operations on the same object and within a single command. In other words, rather than creating intermediate objects, it is possible to perform successive operations on a single table. Although the *data.table* package offers such functionality here, we believe it is much simpler and more intuitive to present to you here the "pipe" operator (*%>%*) of the *magrittr* package, which can be used to both for reassignment and chaining. Syntactically, such a procedure is carried out as follows:
+```{r syntax, eval = FALSE}
+
+DT %>%
+  [ ... ] %>%
+  .[ ... ] %>%
+  .[ ... ]...
+
+```
+
+According to this diagram, *%>%* is first used to assign subsequent operations to the DT object, the sequence of which is ensured by the subsequent uses of **%>%**, but also by the use of the point (**.**), whose function here is to indicate that the following procedure must apply to the result of the previous procedure, an instruction having no direct equivalent in the *data.table library *. This procedure is of course hybrid, but it nevertheless has the advantage of combining the performance and syntactic simplicity of *data.table* with the intuitive assignment and chaining of the **%>%** operator. More generally, such a type of chaining makes it possible to achieve significant gains not only in terms of code writing and readability, but also in terms of space and processing time required, since the chaining of operations reduces the number intermediate tables created during data processing processes. As an example, different frequency distributions can be reordered quickly and simply by chaining, or by using the *order()* function in the *i* argument of the second pair of brackets.
+
+```{r mult_col_mult_group_order, results = 'hide'}
+
+# corpus[, .(occurrences = .N, types = uniqueN(token)),
+#        by = .(source = Publication )] %>%
+#   .[order(occurrences, decreasing = TRUE)]
+
+```
+
+The sorting of these frequency distributions actually represents only one case among a range of more complex operations that can be carried out in one go by command chains. Indeed, any function following the grouping operation performed in *by* can be chained to the command performing the grouping using the combined use of pipe and point
+
+```{r mult_col_mult_group_head_comp}
+
+# all.equal(corpus[, .(occurrences = .N, types = uniqueN(token)),
+#                  by = .(source = Publication )] %>%
+#             .[order(occurrences, decreasing = TRUE)] %>%
+#             .[(1:5)],
+#           head(corpus[, .(occurrences = .N, types = uniqueN(token)),
+#                  by = .(source = Publication )] %>%
+#             .[order(occurrences, decreasing = TRUE)], n = 5))
+
+# Quelle interprétation donnez-vous à ces commandes et à leurs résultats?
+```
+
+The joint use of grouping and chaining functions allows you to quickly restore your analysis corpus in its raw textual form, prior to morpho-syntactic analysis. Let's first start by restoring the text using the *paste()* function, which allows you to concatenate character strings and whose *collapse* argument allows you to specify the characters to be inserted between each join.
+
+```{r paste_corpus, results = 'hide'}
+
+# corpus_brut <- corpus[,
+#                       .(texte_article = paste(token,
+#                                               collapse = " ")),
+#                       by = doc_id]
+
+```
+
+You will notice, however, that the *collapse* argument has inserted a space before each punctuation mark. To remedy this, all you need to do is embed the *paste()* function in a substitution function *gsub()*, which allows the use of regular expressions; you will see these in a later lesson. For now, let's just mention that the *gsub()* function as used here captures any sequence of two groups of characters containing respectively a space and a punctuation mark and then removes the first group from the said sequence, i.e. the one containing the space.
+
+```{r gsub_corpus, results = 'hide'}
+
+# corpus_brut <- corpus[,
+#                       .(texte_article = gsub('( )([[:punct:]])',
+#                                              '\\2',
+#                                              paste(token, collapse = " "))),
+#                       by = doc_id]
+
+```
+
+You will also notice that we are starting the operation of creating the raw corpus from the beginning rather than starting from the results of the last command block. The reason for this choice is very simple: as you will see later, the ordering of operations is a crucial aspect of cleaning a corpus, and as everyone happens to skip a block of code or make a mistake order or configuration, caution is always required when it comes to modifying a corpus using regular expressions.
+
+That said, other cleaning operations are required. You will notice that apostrophes are followed by a space and that the *UDPipe* annotation tool has 'deconstructed' the articles contracted 'au', 'aux', 'du' and 'des'. As in the case of the previous block of code, it is possible to reintroduce them one at a time using the *gsub()* function. That said, it is much easier to do all the cleaning at once using the *mgsub()* function of the eponymous library, which allows you to perform several *gsub()* type modifications at once. . However, pay attention to the ordering of parameters and expressions.
+
+```{r mgsub_corpus, results = 'hide'}
+
+# corpus_brut <- corpus[,
+#                       .(texte_article = mgsub::mgsub(
+#                         paste(token, collapse = " "),
+#                         c('( )([[:punct:]])', "\\' ",
+#                           ' à le ', ' à les ',
+#                           ' À le ', ' À les ',
+#                           ' de le ', ' de les ',
+#                           ' De le ', ' De les '),
+#                         c('\\2', "\\'",
+#                           ' au ', ' aux ',
+#                           ' Au ', ' Aux ',
+#                           ' du ', ' des ',
+#                           ' Du ', ' Des '))),
+#                       by = doc_id]
+# data.table::fwrite(corpus_brut, 'corpus_brut.txt')
+
+
+```
+
+Beyond the cleaning operations, this corpus restitution exercise highlights a fundamental aspect of computer-assisted text analysis: the return to the text. Like all expert reading, there is no definitive, predetermined computer-assisted text analysis procedure; there are of course general rules, but the choice of a particular approach is the result of an often spontaneous and interactive procedure, guided by the results obtained at each of the many stages of treatment. However, such evaluations or validations can only be done by returning to the text, by means of a thoughtful and comparative analysis of the corpus before and after each manipulation. These considerations on the importance of returning to text are an opportunity to introduce you to one of the most fundamental textual analysis and visualization tools in the field, namely concordance.
+
+## Concordance
+
+Concordance (*concordance* or *keyword in context (kwic)* in English) is an old exegetical technique used in philology and consisting of facilitating the semantic analysis of a document or a corpus by the complete listing of lexical contexts minimum occurrence of a word or a group of words within the same document, which can be annotated and commented on as desired by the reader. Before the appearance of computers, creating a concordance, even if only for a single word, was certainly not an easy task, which may explain why only a few texts are subject to it, mainly a few texts sacred and classical secular works. The appearance of automatic concordance generation tools, called concordancers, has however changed the situation, by making it possible to quickly and simply draw up an inventory of the contexts of use of one or more words.
+
+Several R libraries allow you to easily generate concordances, including *quanteda*, *cqp* and *PGRdup*. However, we thought it would be better, for educational purposes, to show you how it is possible to generate a match on your own. Here we will show you two ways to generate a match. The first method consists of capturing any word or group of words as well as the words that precede and follow it using a function based on the use of regular expressions, which we saw in the case of using *mgsub()* and *gsub()* functions. Let's first start by limiting our corpus to documents containing the word we are looking for using the *%like%* function.
+
+```{r concordance1, results = 'hide'}
+
+# corpus_brut[texte_article %like% 'Davide']
+
+```
+
+We thus know which documents in our corpus contain the word we are looking for, but we do not know the lexical contexts of occurrence of our target word. To do this, we will use the *str_extract* function from the *stringr* library as well as a relatively complicated regular expression, which you do not have to understand for the moment.
+
+```{r concordance1full, results = 'hide'}
+
+# corpus_brut[texte_article %like% 'Davide',
+#             stringr::str_extract(
+#               pattern = '(?:\\S+\\s+){0,5}\\bDavide\\b\\s*(?:\\S+\\b\\s*){0,5}',
+#               string = texte_article)]
+
+```
+
+The second, much simpler and faster, is based on the combined use of filtering and grouping operations on the annotated corpus.
+
+```{r concordance2, results = 'hide'}
+
+# corpus[token == 'Davide']
+
+```
+
+By means of a procedure similar to that used for the reconstruction of the corpus, it is possible to extract information relating to the occurrence of the target word and to reconstruct the sentences in question by means of grouping by documents, paragraphs and sentences . To do this, we only keep the information relating to the sentences containing the target word and then reconstitute them by grouping.
+
+```{r concordance2full, results = 'hide'}
+
+# corpus[token == 'Davide', .(doc_id, paragraph_id, sentence_id)] %>%
+#   merge(., corpus, by = c('doc_id', 'paragraph_id', 'sentence_id')) %>%
+#   .[, .(contexte_lexical = paste(token, collapse = " ")), by = doc_id] %>%
+#   .[, contexte_lexical]
+
+```
+
+However, if the second method is faster and simpler to understand than the first, it is however much less flexible: while the first method allows you to precisely specify the substring of characters to search for as well as the extent of the substrings. character strings preceding and following the searched expression, the second only returns whole words and sentences. It is true that it is possible to control the extent of these windows using the *token_id* attribute, but this will complicate the function. Note also that the cleaning operations carried out on the raw corpus must also be applied after execution of the second method. Each method therefore has its advantages and disadvantages; It's up to you to choose the one that best suits your needs, and nothing prevents you from using the functions defined in the libraries mentioned above. One thing is certain, however: regardless of your research objectives, concordance generation will definitely be part of your analysis tools.
+
+## exercises
+
+1. Obtenez, pour chaque source et type de publication, l'auteur ayant publié le plus d'articles.
+
+```{r exercise_21}
+# Write your code here
+
+```
+
+2. Obtenez, pour chaque source et étiquette morpho-syntaxique, le type lexical le plus fréquent
+
+```{r exercise_22}
+# Write your code here
+
+```
+
+3. Restituez le corpus sous sa forme textuelle brute, en prenant soin toutefois de grouper les segments de texte à la fois par document et paragraphe
+
+```{r exercise_23}
+# Write your code here
+
+```
+
+4. Générez la concordance du mot de votre choix au moyen de la méthode par expressions régulières.
+
+```{r exercise_24}
+# Write your code here
+
+```
+
+5. Générez la concordance du mot de votre choix au moyen de la méthode par filtrage et groupement.
+
+```{r exercise_25}
+# Write your code here
+
+```
+
+
+# Visualization
+
+Although it is possible to directly insert visualization functions in *j*, data visualization is generally the last step in a more or less long series of operations and groupings on one or more attributes and requiring the creation of several intermediate datasets. As we saw in the previous segment, it is however possible to chain such processing sequences within a single command, through the joint use of the pipe and the point. Like other more complex procedures, the data visualization functions as well as the processing operations which underlie them can thus be easily embedded within a single command via such chaining.
+
+For data visualization, we will use the excellent *ggplot2* library, developed by Hadley Wichkam and based on the graphics grammar developed by Leland Wilkison in his book *The grammar of graphics* [@wilkinson2005]. The particularity of this grammar is that it uses an additive syntax, based on a basic schema on which different layers of visualization parameters can be superimposed.
+
+```{r grammar_graphics, eval = FALSE}
+
+# Graphique (*Plot*) =  données (Data) +
+#                       esthétique (Aesthetics) +
+#                       géométrie (Geometry) +
+#                       autres couches optionnelles...
+# 
+# données:          ggplot2 permet de travailler uniquement avec des data.frames (nb: le data.table est un 
+#                   type de data.frame)
+# esthétique (aes): projection esthétique des variables à visualiser. Au-delà des coordonnées, permet 
+#                   également de contrôler la couleur, la taille, la forme des points, etc…
+# géométrie:        objet géométrique utilisé pour la visualisation  (histogramme, boîte à moustaches,
+#                   graphique linéaire, ...)
+# 
+# couches optionnelles:
+#   *stat*: transformations statistiques des données
+#   *scale*:  espace esthétique (couleurs, formes, tailles, axes, légendes)
+#   *facets*: subdivision du graphique
+
+```
+
+By means of the **+** operator, it is possible to add different graphic elements and parameters to the basic structure, allowing graphics to be built and modified cumulatively, piece by piece. Unfortunately, it is not possible to use the *%>%* operator for adding visualization instructions in *ggplot2*, this library having been developed before *magrittr*. The additive syntax, however, remains exemplarily simple, allowing anyone to gradually construct very complete graphs through trial and error. As an illustration, let's start by generating the frequency distribution of lexical occurrences from the different sources in the corpus, call the library's basic function, *ggplot()*, then perform an aesthetic projection based on the 'occurrences' attributes and 'source' of our frequency distribution:
+
+```{r ggplot}
+
+# corpus[, .(occurrences = .N),
+#        by = .(source = Publication)] %>%
+#   .[order(occurrences, decreasing = TRUE)] %>%
+#   ggplot2::ggplot() +
+#     aes(x = occurrences, y = source)
+
+```
+
+As you can see, the aes() function added to the basic *ggplot* function using **+** projected the frequency distribution into a two-dimensional space, having the occurrences on the abscissa and the sources on the ordinate. graph is of course incomplete, since it does not display any data. To do this, it is necessary to add a geometric object to the previous command, always using the **+* operator. We thought it would be wise to opt here for the bar chart, which seems well suited to the current data. In *ggplot*, the strip plot can be specified using the *geom_col()* function.
+
+```{r geom}
+
+# corpus[, .(occurrences = .N),
+#        by = .(source = Publication)] %>%
+#   .[order(occurrences, decreasing = TRUE)] %>%
+#   ggplot2::ggplot(aes(x = occurrences, y = source)) +
+#     geom_col()
+
+```
+
+The *ggplot* library allows you to carry out a first visualization of your data very quickly and easily. You can then modify your graph as needed incrementally, by adding new layers to your command. In the present case, the use of scientific notation for the abscissa axis labels seems superfluous to us. To remedy this, let's add a *scale* layer to our command using the **+** operator; Let's use a function to format the labels to disable scientific notation and separate thousands with spaces.
+
+```{r scale}
+
+# corpus[, .(occurrences = .N),
+#        by = .(source = Publication)] %>%
+#   .[order(occurrences, decreasing = TRUE)] %>%
+#   ggplot2::ggplot(aes(x = occurrences, y = source)) +
+#     geom_col() +
+#     scale_x_continuous(labels=function(x) format(x,
+#                                                  big.mark = " ",
+#                                                  scientific = FALSE))
+
+```
+
+If it is quick and easy to visualize such a frequency distribution, what about when it comes to visualizing several variables? For example, when it comes to adding to the previous visualization the number of lexical types per source? As with other libraries included in the *tidyverse*, a collection of extensions designed to work together and based on a common philosophy, *ggplot* assumes that the input datasets are "clean" (**tidy **). Concept developed by Hadley Wickham and derived from the third normal form (3FN) of Codd's relational algebra, the "cleanliness" of clean data sets (*tidy*) is based on respecting the following three principles:
+
+1. Each variable constitutes a column
+2. Each observation constitutes a line
+3. Each type of observation is in a separate table
+
+As an example, consider again the frequency distribution of lexical types and occurrences in the corpus.
+
+```{r freq_dist}
+
+# corpus[, .(occurrences = .N, types = uniqueN(token)),
+#        by = .(source = Publication)] %>%
+#   .[order(occurrences, decreasing = TRUE)]
+
+```
+
+This table is not clean in the sense given by Wickham due to non-compliance with the first rule. The table actually contains three distinct variables: the source, the lexical category (type or occurrence) and the frequency. However, the second variable is divided into two columns and the third variable is not explicitly represented. To remedy this, a commonly used function implemented in the *data.table* library can be used: *melt()*. As its name suggests, *melt()*'s function is to melt a dataset by converting it from a "wide" format to a "long" format.
+
+```{r melt}
+
+# corpus[, .(occurrences = .N, types = uniqueN(token)),
+#        by = .(source = Publication)] %>%
+#   .[order(occurrences, decreasing = TRUE)] %>%
+#   data.table::melt(.,
+#                    id.vars = 'source',
+#                    variable.name = 'cat_lexicale',
+#                    value.name = 'fréquence')
+```
+
+This transformation has of course doubled the length of the table, since the 'lexical category' and 'frequency' variables are no longer divided into two columns, but now have their own column. Once the datasets have been converted into long format, it becomes very easy to represent the different variables using *ggplot2*. Let's return to the example of lexical frequency distributions and perform a visualization using grouped bar charts. To do this, simply specify the variable *cat_lexicale* to the *fill* parameter of the chart aesthetic, then add the value 'dodge' to the position parameter of the chart geometry.
+
+```{r grouped_bar}
+
+# corpus[, .(occurrences = .N, types = uniqueN(token)),
+#        by = .(source = Publication)] %>%
+#   .[order(occurrences, decreasing = TRUE)] %>%
+#   data.table::melt(.,
+#                    id.vars = 'source',
+#                    variable.name = 'cat_lexicale',
+#                    value.name = 'fréquence') %>%
+#   ggplot2::ggplot(aes(x = fréquence, y = source, fill = cat_lexicale)) +
+#     geom_col(position="dodge") +
+#     scale_x_continuous(labels=function(x) format(x,
+#                                                  big.mark = " ",
+#                                                  scientific = FALSE))
+```
+
+Finally, one of the advantages of data visualization is that it offers a synthetic view of data sets and often allows statistical regularities and anomalies to be identified more quickly than analytical methods in the strict sense. To remain within the framework of lexical statistics, an obvious case is the bilogarithmic representation of frequency-rank distributions.
+
+Frequency-rank distributions represent a special type of lexical distribution, in which all lexical types are reduced to both their cardinal and ordinal form: each lexical type is converted to a pair of numbers representing its frequency and rank in the distribution decreasing frequency. The use of these distributions dates back to the work of Jean-Baptiste Estoup [@estoup1912], a specialist and teacher of the Duployé system, a stenographic method based on a geometric phonetic alphabet initially designed for the education of illiterates. In order to enable his students to write shorthand as quickly as possible at a speed close to that of the spoken language, Estoup sets himself the goal of finding which words are most frequent in different contexts and of designing exercises adapted to lexical frequencies. natural language. To do this, Estoup extracts lexical frequency distributions from different oratory and epistolary contexts in order to measure for each successive segment of 1000 words, the number of distinct words, their frequency in descending order as well as their average repetition rate. These first frequency-rank distributions and the visualizations that accompany them constitute the first observations relating to the hyperbolic nature of lexical usage, according to which a handful of very frequent words account for the majority of lexical occurrences in any linguistic sample.
+
+Estoup's empirical and methodological work was taken up independently by Condon [@condon1928] and Zipf [@zipf2002], who discovered that the relationship between lexical types and their frequency is constant over entire distributions. Data visualization played a crucial role in this research: by representing lexical frequencies and ranks on logarithmic axes, the two authors managed to demonstrate that the slope of the line thus formed is surprisingly linear and therefore that the relationship between the variables is surprisingly constant over all distributions. This discovery will also lead Zipf to formulate his famous eponymous law, according to which the frequency of occurrence *f(n)* of a word in a text is linked to its rank *n* in the order of frequencies by a law of the form ${\displaystyle f(n)={\frac {K}{n}}}$ where K is a constant. This "law" will be the subject of numerous critiques, uses and revisions, the most famous being its reformulation in canonical form by Bruno Mandelbrot [@mandelbrot1951].
+
+Of interest for our present purposes, however, several researchers have used frequency-rank distributions and particularly their bilogarithmic representation to evaluate and compare the lexical diversity of different texts. According to such an interpretation and use, the steeper the slope of the line, the more concentrated the vocabulary of the corresponding text. To give you an example of use taken from our corpus, let's start by grouping the terms by source and decreasing order of frequency, delete the terms column then add the rank of the frequencies grouped by source using the *frankv* function of *data.table*
+
+```{r frequency_rank}
+
+# corpus[, .(occurrences = .N),
+#        by = .(source = Publication,
+#               terme = token)] %>%
+#   
+#   .[,rang := data.table::frankv(occurrences,
+#                                 order = -1),
+#     by = source] %>%
+#   
+#   .[, terme := NULL] %>%
+#   
+#   .[order(rang, decreasing = FALSE)]
+
+```
+
+And now let's proceed to log this data using *ggplot*. This data set is already clean, so it only suffices to configure the aesthetics of the graph: to do this, let's plot the rank of the terms and their frequency on the abscissa and ordinate respectively, let's use the color to differentiate the distributions from each of the sources using the *color* argument, add a linear geometry object, convert the graph axes to logarithmic format, then remove the tick labels for readability.
+
+```{r line_plot}
+
+# corpus[, .(occurrences = .N),
+#        by = .(source = Publication,
+#               terme = token)] %>%
+#   
+#   .[,rang := data.table::frankv(occurrences,
+#                                 order = -1),
+#     by = source] %>%
+#   
+#   .[, terme := NULL] %>%
+#   
+#   .[order(rang, decreasing = FALSE)] %>%
+#   
+#   ggplot2::ggplot(aes(x = rang, y = occurrences, color = source)) +
+#     ggplot2::geom_line() +
+#     coord_trans(x = 'log10', y = "log10") +
+#     theme(axis.text.x =element_blank(),
+#           axis.text.y = element_blank())
+
+```
+
+It goes without saying that proceeding in this way is much quicker and easier than trying to approximate the function of each of the lines in order to obtain the value of the slope. This also allows you to realize that the lines are not strictly speaking "lines", in other words only the relationship between the frequency and the frequency rank of the lexical types of a text or a corpus, although surprisingly regular, is however not constant over all distributions. Relative to lexical concentration itself, this graph offers the possibility of drawing some quick observations. Overall, the distribution of vocabulary from the different sub-corpora seems relatively uniform, which suggests that the lexical concentration is comparable between the different sources. The case of articles from the *SRC Nouvelles* website, however, seems to stand out from the rest, since the slope there is slightly steeper than elsewhere, which suggests a slight lexical densification in this case.
+
+These few blocks of code show you how easy and quick it is to carry out a first corpus analysis and to carry out first data visualizations by means of the joint use of the *data.table*, *magrittr* and * libraries. ggplot2*. However, two points should be mentioned here. First of all, a structured, cleaned and annotated corpus like the one used here is a finished product: like the polishing and cutting of a jewel, a corpus does not exist in its raw state, the documents which it includes must be previously extracted and subjected to different types of processing, particularly linguistic. Certainly one of the most crucial and time-consuming stages of text mining, corpus pre-processing will be the subject of the next lesson. Another important point: with the explanation by font and the visualization of the variables of the frequency distributions of occurrences, frequency ranks and lexical types, we strictly speaking leave the domain of univariate analysis. Although useful, univariate analysis remains limited in scope and can only offer a "surface view" of a corpus, one variable at a time. In the courses that follow, more advanced mathematical and statistical techniques and models, based on the consideration of more than one variable and allowing more detailed textual analyses, will be presented to you.
+
+## exercises
+
+1. Obtenez, pour chaque source et type d'article, le nombre d'articles publiés et visualisez les résultats au moyen d'un diagramme à barres groupées
+
+```{r exercise_26}
+
+# Write your code here
+
+```
+
+2. Obtenez, pour chaque étiquette morpho-syntaxique, la fréquence d'occurrences et de types lexicaux du corpus. S'agit-il d'un jeu de données propres? Sinon, faites les modifications qui s'imposent. Procédez à la visualisation des résultats au moyen d'un diagrammes à barres groupées.
+
+```{r exercise_27}
+# Write your code here
+
+```
+
+3. Représentez sous forme de diagramme linéaire la fréquence mensuelle d'articles par source.
+
+```{r exercise_28}
+# Write your code here
+
+```
+
+4. Reprenez le cas de la comparaison entre les articles 'Affaires' du Devoir et du Journal de Montréal, présenté dans le chapitre sur les groupements. Procédez à la représentation bilogarithmique des distributions fréquence-rang pour ce type d'article. Quelle conclusion tirez-vous?
+
+```{r exercise_29}
+# Write your code here
+
+```
+
+# References

@@ -1,0 +1,415 @@
+---
+title: "Rigsrevisionen Workshop on Computational Text Analysis"
+subtitle: "Part I: Introduction to Preprocessing"
+author: "Maxime Sainte-Marie, Ph.D"
+date: "May 6th 2024"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    css: '../../scripts/css_files/standard.css'
+geometry: margin=1in
+knit: (function(inputFile, encoding) {
+  browseURL(
+    rmarkdown::render(
+      inputFile,
+      encoding = encoding,
+      output_dir = 'documents/manuscripts',
+      output_file = "1_preprocessing.html"))})
+
+---
+
+```{r setup, include=FALSE}
+# Make sure every package is installed
+for(this_package in c("data.table",
+                      'DT',
+                      'gt',
+                      "tidyverse",
+                      "readxl",
+                      'fs',
+                      "rstudioapi",
+                      'knitr',
+                      'rprojroot',
+                      'udpipe')){
+  if(!this_package %in% installed.packages()){
+    install.packages(this_package)
+  }
+}
+
+#activate magrittr to use pipe operator without referencing
+library(magrittr)
+library(data.table)
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  root.dir = rprojroot::find_rstudio_root_file())
+
+```
+
+# Introduction
+
+Prior to any computer-assisted text analysis, an important part of the researcher's work consists not only of collecting the data, but also and above all of cleaning and pre-processing the documents forming the corpus. The content and quality of the results of any analysis are directly linked to the proper execution of this task, which can take up a large part of the researcher's time and work efforts.
+
+Obviously the text is in a bad state. As such, it is important to remember that the amount of time and effort invested in corpus preprocessing is directly proportional to the quality of the original data. In the case of a PDF for example, the less well formatted the PDF, the less likely the converted text will resemble the text as observed on the PDF document.
+
+# Corpus cleaning with *stringr*
+
+There is no ready-made formula or algorithm allowing you to move from a raw corpus to a cleaned corpus in a few well-defined steps. Each corpus being unique, it is impossible to know in advance what can be done to improve its quality. The only viable strategy is to inspect the raw text and proceed one operation at a time, through trial and error and sometimes even backwards, following inevitable handling errors.
+
+At first glance, the imported document text has four distinct sections:
+
+- the header of the article and the metadata it contains;
+- the body of the article;
+- the footer of the article, containing advertisements and sharing functionalities;
+- the caption of the image included in the document, caption not forming a coherent whole in the raw text, but rather being scattered between different segments of text.
+
+Given this particular configuration, the cleaning strategy that seems to us to be the fastest and most efficient consists of identifying and extracting each of these sections using regular expressions. To do this, we will use the functions **extract()**, **replace()** and **replace_all()** from the **stringr** library.
+
+```{r 2.1 stringr}
+
+if(!("stringr" %in% rownames(installed.packages()))){install.packages('stringr')}
+library(stringr)
+
+```
+
+The first cleaning step here will consist of creating a data frame for the cleaned document, then extracting the article header. To do this, the **stringr::str_extract()** function, which returns the first character string entered by the regular expression, will be used. The regular expression designed for this purpose is relatively simple: it involves entering everything from the start of the text string up to and including the expression 'La Presse'.
+
+```{r 2.2 headerExtract}
+
+#Création du tableau de données pour le fichier nettoyé
+#document_propre = doc_pdf
+#metadata = stringr::str_extract(document_propre,'^(.|\r\n)+\r\n\\s{2,}[A-Z][a-z]\\s[A-Z][a-z]+(?=\r\n)')
+#metadata
+```
+
+It may seem surprising here that the character string 'La Presse' does not appear explicitly in the regular expression. On this point, it is important to understand that the best way to promote the reuse of a function using regular expressions is to make it as generalizable as possible. And to do this, it is sometimes best not to specify the strings directly, but rather to capture it through higher-level patterns or trends, which may capture structurally similar expressions in other documents.
+
+The header of the article being adequately entered here, we can use the regular expression formulated to remove the header from the text corpus. Note, however, that the character string forming the article header has been assigned to the 'metadata' variable. This operation allows us to persist this string and call it later to extract the article metadata.
+
+The **stringr::str_replace()** function called below allows you to replace the first string captured by the previous regular expression with an empty string and thus delete the header of the article from the corpus of the text. Note that it is important to ensure that the correct character string has been entered before removing it, otherwise you risk making unintentional changes to your document, moreover without your knowledge.
+
+```{r 2.3 headerRemove}
+#document_propre = stringr::str_replace(document_propre,'^(.|\r\n)+\\s{2,}[A-Z][a-z]\\s[A-Z][a-z]+(?=\r\n)','')
+#document_propre
+```
+
+The second cleaning step here will consist of removing the footer of the article from the body text. The objective here is to exploit the structural particularities of the chain that we wish to remove in order to adequately capture it. As such, the footer of the article is particular in that it begins with two capitalized verbs, separated by several spaces, then followed by a series of spaces and a series of numbers; specifying this substring and all the characters that follow it until the end of the string isolates the footer from the rest of the article.
+
+```{r 2.4 footerExtract}
+#pied = stringr::str_extract(document_propre,'\n[A-Z][a-z]+\\s+[A-Z][a-z]+\\s+\\d+(.|\r\n)+')
+#pied
+
+```
+
+Having managed to enter the correct string, we can now remove it from the body of text using the **str_replace** function.
+
+```{r 2.5 footerRemove}
+#document_propre = stringr::str_replace(document_propre,'\n[A-Z][a-z]+\\s+[A-Z][a-z]+\\s+\\d+(.|\r\n)+','')
+#document_propre
+```
+
+The operation of removing the caption from the photo is more delicate. However, it is possible to capture it using a single expression. It is important to note, however, that when it comes to extracting certain substrings, sometimes it is better to extract each substring individually rather than trying to capture everything using a single regular expression.
+
+```{r 2.6 phototext}
+#texte_photo = stringr::str_extract(document_propre,'Une des nombreuses(.|\r\n)+La Presse')
+#document_propre = stringr::str_replace(document_propre,'Une des nombreuses(.|\r\n)+La Presse','')
+#texte_photo
+```
+
+Following the entry, conservation and removal of the photo caption, the body of text is thus stripped of the different sections identified at the start of the cleaning phase.
+
+```{r 2.7 Body}
+#document_propre
+```
+
+Although the body text looks much better than it did at the beginning of the process, the cleanup procedure is far from complete. Let's first start by removing all unnecessary carriage returns and spaces. To do this, we will use the **str_replace_all()** function, which is identical to the **str_replace()** function, except that it does not just grab the first substring matching the constraints specified by the regular expression, but instead applies to all substrings satisfying it.
+
+```{r 2.8 removeBreaks}
+#document_propre = stringr::str_replace_all(document_propre,'\r\n',' ')
+#document_propre
+
+```
+
+```{r 2.9 removeSpaces}
+#document_propre = stringr::str_replace_all(document_propre,'\\s+',' ')
+#document_propre
+
+```
+
+Also, in order to facilitate the morpho-syntactic labeling of the document, it is preferable to replace the left angle brackets and the spaces which precede them with points. Of course, this strategy is not ideal, but it is important to remember here that the texts collected for analysis purposes very often present an unusual structure, often and sometimes even significantly diverging from the classic textual form. Following these changes, three additional cleanup operations must be performed, the first to remove the leading spaces from the string, the second to replace the trailing spaces with a period, then the third to add a period before each party acronym.
+
+```{r 2.10 cleanBody}
+#document_propre = stringr::str_replace_all(document_propre,'\\s+>','.')
+#document_propre = stringr::str_replace(document_propre,'^\\s+','')
+#document_propre = stringr::str_replace(document_propre,'\\s+$','\\.')
+#document_propre = stringr::str_replace_all(document_propre,'\\s+(?=(PQ|CAQ|QS))','\\. ')
+#document_propre
+
+```
+
+Following these different cleaning operations, the text now seems ready for the morphosyntactic labeling phase.
+
+# Linguistic preprocessing
+
+In corpus linguistics, the morpho-syntactic analysis or parts of speech (*part-of-speech (POS) tagging*, *grammatical tagging* or *word-category disambiguation* in English) consists of identifying the grammatical function ( also called grammatical class, category and species) of words. Such an analysis is based on the principle that lexical occurrences with the same grammatical properties have similar syntactic and morphological behavior, in the sense that they have a similar function within sentences and inflect similarly in specific syntactic contexts. For a very long time, these operations were carried out by hand, by experts. Since then, a multitude of linguist-programmers have strived to design algorithms which automate the discretization or segmentation of lexical occurrences and carry out their grammatical classification, associating each of them with a particular grammatical function. **TreeTagger** does all this wonderfully, even adding to this procedure a lemmatization operation reducing, on the basis of its grammatical function, each lexical occurrence to its canonical form, i.e. the infinitive mode for conjugal inflections (verbs) and the masculine singular for declinable forms (determinants, nouns, pronouns, adjectives). Let us mention in this respect that a lemmatization which does not proceed from a prior syntactic analysis cannot be reliable; we only have to think of the homonymic case 'she walked to the market' to realize this.
+
+That said, let's start by importing the '**koRpus** library, then apply the **treetag()** function on the cleaned document.
+
+```{r 3.1 treetag}
+#if(!("koRpus" %in% rownames(installed.packages()))){install.packages('koRpus')}
+#library('koRpus')
+#document_etiquete=koRpus::treetag(document_propre,treetagger = "manual", lang="fr", format="obj",TT.options = list(path="C:/TreeTagger",preset="fr",no.unknown=T))
+#is.object(document_etiquete)
+#class(document_etiquete)
+#slotNames(document_etiquete)
+```
+
+The treetag function thus generates an object of type 'koRpus', comprising three attributes (or *slots* according to S4 object terminology). Only the description of the labeling interests us here. We can extract it using the **koRpus::TaggedText()** function or simply by calling the 'TT.res' attribute of the 'document_etiquete' S4 object.
+
+```{r 3.2 taggedText}
+#document_etiquete = koRpus::taggedText(document_etiquete)
+
+#str(document_etiquete)
+```
+
+The morpho-syntactic labeling carried out by TreeTagger thus generates a data frame made up of 8 different attributes. Let's limit ourselves for the moment to the **document_etiquete$token** attribute, which contains each of the 162 lexical occurrences of the document, identified by the TreeTagger segmentation function. I draw your attention to the bad encoding of the fourth occurrence listed above. Welcome to the world of programming! Since such an encoding problem does not occur when the **treetag()** function is called from a UNIX-based system (Linux or Mac), it is a safe bet that it is 'a side effect linked to the functioning of Perl within the Windows operating system. Through trial and error, we found an inelegant but effective solution, consisting of saving the label dataframe using the **write.csv2()** function, reloading it via **read.csv2**, taking However, be careful to require that the downloaded document be encoded in 'UTF-8' mode, then delete it using the **file.remove()** function.
+
+```{r 3.3 encodingBypass}
+#write.csv2(document_etiquete,'fichierEncodage.csv',row.names=FALSE)
+
+#document_etiquete=read.csv2('fichierEncodage.csv',encoding='UTF-8',stringsAsFactors = FALSE)
+
+#file.remove('fichierEncodage.csv')
+
+#str(document_etiquete)
+```
+
+
+For a closer look at the results, we invite you to use the **View()** function. In the field of computational linguistics, very few algorithms can boast of offering such quality of morpho-syntactic labeling, particularly with regard to the French language.
+
+However, during your inspection of the tagged file, you probably noticed that the $stop$ and $stem$ attributes have no value for all lexical occurrences. The reason is that, although **TreeTagger** allows categorization of stop words and stemming of lexical occurrences, no indication has been provided to this effect in the parameters of the $treetag$ function. We will see how to remedy this situation in the next two subsections.
+
+## Anti-lexicon
+
+For stopwords, **treetag** accepts any character vector for anti-dictionary (for example, **c("The", "be", "is", "and" , “the”, “no”, “to be”, “is”, “not”)**). However, for the sake of completeness, we suggest that you use the French anti-dictionary provided by a bookstore which will be presented to you in the following weeks: **tm**.
+
+```{r 3.4 stopwords}
+#antiDict = tm::stopwords('fr')
+
+#sort(antiDict)
+```
+
+As a test, let's run **treetag()** again, but specify **stopwords=antiDict** in the function parameters so that the list above is used as an anti-dictionary.
+
+```{r 3.5 stopTreeTag}
+#document_etiquete = koRpus::treetag(document_propre,treetagger = "manual", lang = "fr", format="obj",stopwords = antiDict,TT.options = list(path="C:/TreeTagger",preset="fr",no.unknown=T))
+
+#document_etiquete = koRpus::taggedText(document_etiquete)
+
+#write.csv2(document_etiquete,'fichierEncodage.csv',row.names=FALSE)
+
+#document_etiquete=read.csv2('fichierEncodage.csv',encoding='UTF-8',stringsAsFactors = FALSE)
+
+#file.remove('fichierEncodage.csv')
+
+#str(document_etiquete)
+```
+
+The **$stop** attribute now contains non-empty variables, with each boolean indicating whether the corresponding occurrence is a stop word or not. However, I draw your attention to the 44th occurrence of the labeled corpus, *the*. Although this is adequately lemmatized as *the*, it is however not categorized by **TreeTagger** as an empty word, unlike its lemma (see the 12th occurrence of **document_etiquete** to check) . Why is this so? Quite simply because stop word detection is performed on occurrences, not lemmas. However, **TreeTagger** does not remove the apostrophe from **l'** during segmentation, and as **l'** does not appear in the anti-dictionary above, it does not is simply not recognized as a stop word. The same goes for all stop words including an apostrophe. To remedy this situation, we can simply modify the anti-dictionary by adding the missing stop words and rerun **treetag()** taking care to use the new version of the anti-dictionary. You can subsequently validate the operation carried out by re-inspecting the labeled document using **View()**.
+
+```{r 3.6 stopwordsFull}
+
+#antiDict = tm::stopwords('fr')
+#antiDict = c(antiDict,c("l'"))
+
+#document_etiquete = koRpus::treetag(document_propre,treetagger = "manual", lang="fr", format="obj",stopwords = antiDict,TT.options = list(path="C:/TreeTagger",preset="fr",no.unknown=T)).
+
+#document_etiquete = koRpus::taggedText(document_etiquete)
+
+#write.csv2(document_etiquete,'fichierEncodage.csv',row.names=FALSE)
+
+#document_etiquete=read.csv2('fichierEncodage.csv',encoding='UTF-8',stringsAsFactors = FALSE)
+
+#file.remove('fichierEncodage.csv')
+
+#str(document_etiquete)
+```
+
+## Stemming
+
+For rooting, **treetag()** accepts any algorithm, except that no arguments can be specified. However, this can pose a problem. Let's take for example the algorithm recommended by the designers of **koRpus**, that is, the one called by the **wordStem()** function of the **SnowballC** library. The algorithm called by this function (and exhaustively presented at this address: https://goo.gl/uZyZKx) can perform the rootization of lexical occurrences for each of the following languages.
+
+```{r 3.7 languages}
+#SnowballC::getStemLanguages()
+```
+
+However, to stem a corpus in French, the argument **language='french'** must be specified when calling the **wordStem()** function. However, the **treetag()** function does not allow arguments to be included in the algorithm specified for the **stemming** argument. Before abandoning any attempt at rooting in French, let's first start by visualizing the **wordStem()** function to see what it consists of.
+
+```{r 3.8 wordStem}
+#SnowballC::wordStem
+```
+
+You will notice that in the arguments to the **wordStem** function, **language** defaults to **"porter"**, which is the name of the stemming algorithm used for the English language. So, to make this function root to French by default, we could simply change the default value of the **language** attribute from **"porter"** to **french**. Rather than modifying the **wordStem()** function directly, which is doable but not recommended, we can simply create a new function, **rootizer()**, similar in every way to the **wordStem( )**, except for the default value assigned to the **language** attribute.
+
+```{r 3.9 newWordStem}
+#racinisateur=function (words, language = "french") 
+#{
+  #words <- as.character(words)
+  #language <- as.character(language[1])
+  #.Call("R_stemWords", words, language, PACKAGE = "SnowballC")
+#}
+#racinisateur
+```
+
+This function having been defined and included in our R working environment, we can now use it without arguments in the **treetag** function call in order to obtain a rootization adapted to the French language.
+
+```{r 3.10 frenchStemming}
+#document_etiquete=koRpus::treetag(document_propre,treetagger = "manual", lang="fr", format="obj",stemmer=racinisateur,stopwords = antiDict,TT.options = list(path="C:/TreeTagger",preset="fr",no.unknown=T))
+
+#document_etiquete=koRpus::taggedText(document_etiquete)
+
+#write.csv2(document_etiquete,'fichierEncodage.csv',row.names=FALSE)
+
+#document_etiquete=read.csv2('fichierEncodage.csv',encoding='UTF-8',stringsAsFactors = FALSE)
+
+#file.remove('fichierEncodage.csv')
+
+#str(document_etiquete)
+```
+
+To get a quick glimse of the stemming difficulties that are specific to the danish language, you can have a look at [this](http://snowball.tartarus.org/texts/scandinavian.html) 
+
+## Numbering
+
+Among the different morpho-syntactic tags assigned by TreeTagger, one of them, 'SENT', indicates the ends of sentences in the tagged document. It is thus possible to number not only the lexical occurrences of the document according to their order of appearance, but also according to the order of occurrence within the sentence to which they belong.
+
+```{r 3.11 numbering}
+
+#sent=1
+#for (row in 1:nrow(document_etiquete)){
+  #document_etiquete$rang_occurrence[[row]]=row
+  #document_etiquete$rang_phrase[[row]]=sent
+  #if(document_etiquete$tag[[row]]=='SENT'){
+    #sent=sent+1
+  #}
+#}
+
+```
+
+# Metadata
+
+Once the lexical occurrences have been adequately labeled, we can then attach to the labeled document the various metadata relating to the document, i.e. the name of the processed file, followed by the information included in the article header preserved during the cleaning phase.
+
+```{r 3.12 metadata}
+#fichier
+#metadata
+#texte_photo
+```
+
+Assigning the file name to the tagged document is a formality.
+
+```{r 3.13 fileData}
+#document_etiquete$fichier = fichier
+```
+
+However, the information contained in the 'metadata' and 'texte_photo' variables is different. Among these two segments, 7 different attributes seem worthy of interest to us:
+
+- The date of publication of the article,
+- The date the article was last modified,
+- The title of the article
+- The author of the article
+- The source of the article
+- The accompanying text of the photo
+- The name of the photographer
+
+Let's start by isolating, extracting and joining the two dates. To do this, two structural attributes of the string to favor are the bar (**|**) and the first carriage return.
+
+```{r 3.14 dates}
+#stringr::str_extract(metadata,'^.*(?=\\|)')
+
+#stringr::str_extract(metadata,'(?<=\\|).*(?=\r\n*)')
+
+#document_etiquete$date_publication=stringr::str_extract(metadata,'^.*(?=\\|)')
+
+
+#document_etiquete$date_modif=stringr::str_extract(metadata,'(?<=\\|).*(?=\r\n*)')
+#metadata = stringr::str_replace(metadata,'^.+\r\n','')
+```
+
+For the source variable, it is possible to enter the corresponding substring by capturing the first substring comprising in order an uppercase letter, a lowercase letter, a space, an uppercase letter, then a series of lowercase letters.
+
+```{r 3.15 source}
+#stringr::str_extract(metadata,'[A-Z][a-z]\\s[A-Z][a-z]+')
+
+#document_etiquete$source=stringr::str_extract(metadata,'[A-Z][a-z]\\s[A-Z][a-z]+')
+
+#metadata = stringr::str_replace(metadata,'[A-Z][a-z]\\s[A-Z][a-z]+','')
+#metadata
+
+```
+
+Over the course of substitution operations, the string 'metadata' only has a few characters left. The author and title of the tagged document can quickly be extracted by isolating and then removing the first substring comprising two groups of literals starting with an uppercase letter and separated by spaces and optionally carriage returns, then removing from the string 'metadata 'remaining all returns.
+
+```{r 3.16 authortitle}
+#stringr::str_extract(metadata,'[A-Z][a-z]+(\r\n)?\\s+[A-Z][a-z]+(-\r\n\\s+[A-Z][a-z]+)?')
+
+#document_etiquete$author = stringr::str_extract(metadata,'[A-Z][a-z]+(\r\n)?\\s+[A-Z][a-z]+(-\r\n\\s+[A-Z][a-z]+)?')
+
+#metadata = stringr::str_replace_all(metadata,'([A-Z][a-z]+(\r\n)?\\s+[A-Z][a-z]+(-\r\n\\s+[A-Z][a-z]+)?|\r\n)','')
+
+#metadata
+
+#document_etiquete$titre = metadata
+
+```
+
+At the end of this series of operations, a data frame was generated, including all the segmented and lemmatized lexical occurrences of the initial document as well as all the relevant metadata for analysis purposes. You can view the result one last time using the **View()** function.
+
+# Embedding tagged documents
+
+Obviously, any corpus being made up of a multitude of documents processed in this way, the processing and cleaning of a document must necessarily follow its "incorporation", that is to say its integration into the corpus to be analyzed. At the current stage of processing, this step is no more than a formality.
+
+```{r 3.17 corpus}
+#corpus = data.frame()
+#corpus = rbind(corpus,document_etiquete)
+```
+
+
+All textual corpora used for computer-assisted analysis purposes were generated based on collection, cleaning and pre-processing operations similar to those presented above. If the morpho-syntactic labeling carried out by TreeTagger can easily be applied to other documents, it is quite different for cleaning operations: not only can the same document be cleaned in several different ways, but it is rather rare that such operations can be applied as is to more than one document. Despite this procedural multiplicity, a certain cohesion of processing is nevertheless possible, as long as the objectives of these different operations remain substantially the same.
+
+#Exercises
+
+Voici une série d'exercices qui vous permettront de vous familiariser davantage avec les opérations de nettoyage et prétraitement de corpus. En cas d'impasse ou de problème, n'hésitez pas à demander notre aide.
+
+1. Nous avons précédemment optimisé la détection de mots vides lors de la phase d'étiquetage en ajoutant *l'* à l'anti-dictionnaire fourni par la librairie **tm**. Toutefois, *l* n'est pas le seul mot vide ignoré par **treetag()** faute d'apostrophe. Trouvez les autres cas similaires présents dans l'antidictionnaire, modifiez celui-ci accordément et relancez le processus d'étiquage
+
+2. Créez un nouveau document_propre étiqueté, en utilisant cette fois-ci l'algorithme de racinisation par défaut **wordStem**. Comparez la différence de performance de **wordStem** et **racinisateur**. À quels endroits procèdent-ils différemment? Lequel des deux vous paraît le plus adapté à la langue française? 
+
+3. Sur la base des procédures et fonctions spécifiées ci-haut, procédez au nettoyage et à l'étiquetage du fichier **Document2.pdf**. Attention, certaines expressions régulières n'auront pas le même effet que dans le cas du nettoyage du fihier **Document1.pdf**. Il faut donc d'abord déterminer si les fonctions capturent les bonnes sous-chaînes avant de modifier le texte, quitte à modifier ces expressions régulières au besoin. Donc, tâchez de procéder par étapes et n'hésitez pas à demander notre aide.
+
+Nous avons également cru bon ajouter deux exercices plus corsés, question de vous permettre de vous familiariser davantage avec les expressions régulières. Nous ne vous demandons pas de les faire en classe. Il s'agit plutôt d'exercices *take home* optionnels; libre à vous de tenter l'aventure ou pas. Sachez toutefois que nous comptons mettre un solutionnaire à votre disposition.
+
+4. Sur la base des fonctions présentées ci-haut, procédez à la conversion, au nettoyage et à l'étiquetage morpho-syntaxique des autres documents-exercices à votre disposition. Le mot d'ordre ici est de procéder méthodiquement, étape par étape. Voici comment nous vous suggérons de procéder.
+    1. Créez un data frame vide intitulé **corpus**
+    2. Créez une fonction **for()** dont l'objectif sera d'itérer une série de fonctions sur chaque document-exercice.
+    3. Au sein de cet boucle **for()**,
+        1. Créez un data frame **document** doté les attributs vides suivants: 'fichier', 'auteur', 'source','date_publication', 'date_modif', 'titre', 'texte'. Ces attributs peuvent être ajoutés au moment de la création du data frame, soit entre les parenthèses de l'appel de fonction créant le data frame et au moyen d'une expression de type **x='NA'**. Ajoutez également **stringsAsFactors=FALSE** entre les parenthèses.
+        2. Créez une fonction permettant d'ajouter ce data frame **document** au data frame **corpus**, à titre de rangée. Vous trouverez la fonction qui vous permet de faire cela quelque part dans ce document.
+        3. Ajoutez à votre script la commande **corpus**, laquelle vous retournera le data frame éponyme. L'exécution de votre script devrait à cette étape-ci vous montrer un data frame **corpus** doté de cinq rangées, ayant chacune des attributs vides spécifiés ci-haut.
+        4. Écrivez une fonction qui importe le document, le convertit en format texte, puis lui assigne l'attribut **texte**. Une fois cette opération effectuée, le texte de chaque document-exercice devrait normalement figurer dans la colonne **texte** du data frame **corpus**.
+        5. Écrivez une fonction qui assigne à l'attribut **fichier** du document le nom de celui-ci
+        6. Écrivez une fonction qui élimine les pieds de page du texte contenu dans la colonne **texte**. Assurez-vous que cette fonction soit adéquate pour chacun des documents.
+        7. Écrivez une fonction qui extrait, conserve, puis élimine l'entête du corps de texte contenu dans la colonne **texte**. Assurez-vous que cette fonction soit adéquate pour chacun des documents.
+        8. Identifiez les métadonnées pertinentes contenues dans l'entête de l'article des documents et assignez les aux attributs vides correspondants du dataframe **document**. Si vous n'êtes pas en mesure de trouver une expression régulière générale permettant de saisir un attribut particulier pour tous les documents, nous vous suggérons de procéder autrement, soit en insérant à l'intérieur de la boucle **for()** une commande conditionnelle de type **if(document$fichier==** _nom du fichier du document concerné_ **){**  _fonction adaptée au document concerné_ **}**
+        9. Écrivez une ou plusieurs fonctions permettant d'identifier, d'extraire et d'éliminer le texte d'accompagnement des images de chacun des documents-exercices et contenu dans la colonne **texte**. L'usage des commandes conditionnelles spécifiées à la précédente étape vous sera très utile ici.
+        10. Écrivez une ou plusieurs fonctions permettant de finaliser le nettoyage du corps de texte contenu dans la colonne **texte**. À la fin de cette étape, vous devriez avoir un data frame **corpus** formé de documents nettoyés, à l'image de la démonstration ci-haut.
+        
+5. En partant du corpus nettoyé obtenu à la fin de l'exercice précédent, procédez à son étiquetage morpho-syntaxique au moyen de **TreeTagger**. Ici encore, nous vous suggérons de procéder méthodiquement:
+    1. Créez un data frame **corpus_etiquete**.
+    2. Créez une fonction qui:
+        1. Génère un data frame **document_etiquete** sur la base de l'application d **TreeTagger** à l'attribut **texte** de chaque document-rangée du data frame **corpus**. Assurez-vous de fournir à la fonction **treetag** un anti-dictionnaire et de lui spécifier un algorithme de racinisation.
+        2. Numérote les occurrences lexicales incluses dans **document_etiquete** selon leur ordre d'apparition dans le document ainsi que selon le rang de la phrase qui les contient.
+        3. Ajoute les métadonnées du document correspondant à toutes les rangées-occurences du data frame **document_etiquete**
+        4. Ajoute le data frame **document_etiquete** au bas du data frame **corpus**, à titre de rangée. Vous trouverez la fonction qui vous permet de faire cela quelque part dans ce document.s
+
+And There you go! Your exercise corpus is ready for analysis!
